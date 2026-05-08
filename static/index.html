@@ -156,7 +156,12 @@ async function checkHealth() {
 }
 checkHealth();
 
-drop.addEventListener('click', () => fileInput.click());
+// IMPORTANT: do NOT bind a click->fileInput.click() handler on the <label>.
+// On iOS Safari, the native label-click already opens the file picker; an
+// extra programmatic .click() double-fires and the picker either fails to
+// open or opens-then-dismisses ("entering the image doesn't do anything").
+// Keyboard-only users still get the same path via Enter/Space (label is
+// natively clickable, but tabindex=0 + keydown makes it explicit).
 drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
 ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('dragover'); }));
 ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('dragover'); }));
@@ -169,8 +174,15 @@ window.addEventListener('paste', (e) => {
 });
 
 async function handleFile(file) {
-  if (!file || !file.type.startsWith('image/')) {
-    statusEl.innerHTML = '<span class="err">not an image</span>';
+  if (!file) {
+    statusEl.innerHTML = '<span class="err">no file received</span>';
+    return;
+  }
+  // iOS Safari sometimes leaves type empty (e.g. some HEIC). Sniff the name.
+  const looksImage = (file.type && file.type.startsWith('image/'))
+    || /\.(png|jpe?g|webp|gif|bmp|heic|heif)$/i.test(file.name || '');
+  if (!looksImage) {
+    statusEl.innerHTML = '<span class="err">not an image (got type='+ (file.type || 'empty') +', name='+ (file.name || 'unnamed') +')</span>';
     return;
   }
   if (file.size > 10 * 1024 * 1024) {
@@ -178,40 +190,62 @@ async function handleFile(file) {
     return;
   }
 
+  // Show preview state IMMEDIATELY so user sees something happened on iOS,
+  // even before the multipart upload starts.
   previewRow.style.display = '';
-  previewImg.src = URL.createObjectURL(file);
+  try { previewImg.src = URL.createObjectURL(file); } catch (e) { /* HEIC: no preview, that's OK */ }
   rxnsEl.innerHTML = '';
   rawDetails.style.display = 'none';
-  statusEl.innerHTML = '<span class="spinner"></span>processing&hellip;';
+  statusEl.innerHTML = '<span class="spinner"></span>uploading&hellip; ('+ (file.name||'image') +', '+ (file.size/1024/1024).toFixed(2) +'MB)';
   const t0 = performance.now();
   if (elapsedTimer) clearInterval(elapsedTimer);
   elapsedTimer = setInterval(() => {
-    elapsedEl.textContent = ((performance.now() - t0) / 1000).toFixed(1) + 's elapsed';
+    const sec = (performance.now() - t0) / 1000;
+    elapsedEl.textContent = sec.toFixed(1) + 's elapsed';
+    // Soft-update status text once upload is presumably done
+    if (sec > 2 && /uploading/.test(statusEl.innerHTML)) {
+      statusEl.innerHTML = '<span class="spinner"></span>processing&hellip; (CPU inference, 5&ndash;30s typical, up to 90s under load)';
+    }
   }, 100);
+
+  // 120s client-side timeout via AbortController.  Without this iOS Safari
+  // can hold a fetch open indefinitely on a slow/saturated backend and the
+  // user just sees a spinner forever.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120000);
 
   const fd = new FormData();
   fd.append('file', file);
   try {
-    const r = await fetch('/api/predict', { method: 'POST', body: fd });
+    const r = await fetch('/api/predict', { method: 'POST', body: fd, signal: controller.signal });
+    clearTimeout(timeoutId);
     const t1 = performance.now();
     if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
     elapsedEl.textContent = ((t1 - t0) / 1000).toFixed(2) + 's';
     if (!r.ok) {
       const detail = await r.json().catch(() => ({}));
-      statusEl.innerHTML = '<span class="err">' + r.status + ' ' + (detail.detail || r.statusText) + '</span>';
+      let msg = r.status + ' ' + (detail.detail || r.statusText);
+      if (r.status === 415) msg += ' (try saving the photo as JPEG; HEIC requires server support)';
+      statusEl.innerHTML = '<span class="err">' + msg + '</span>';
       return;
     }
     const d = await r.json();
     renderResults(d);
     statusEl.innerHTML = '<span class="ok">found ' + (d.reactions?.length || 0) + ' reaction(s)</span>';
   } catch (e) {
+    clearTimeout(timeoutId);
     if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
-    statusEl.innerHTML = '<span class="err">' + e.message + '</span>';
+    if (e.name === 'AbortError') {
+      statusEl.innerHTML = '<span class="err">timed out after 120s &mdash; backend may be busy. <a href="javascript:location.reload()">try again</a></span>';
+    } else {
+      statusEl.innerHTML = '<span class="err">' + (e.message || 'request failed') + ' &middot; <a href="javascript:location.reload()">try again</a></span>';
+    }
   }
 }
 
 function escapeHtml(s) {
-  return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 function sanitizeSvg(svg) {

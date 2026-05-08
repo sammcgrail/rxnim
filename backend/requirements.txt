@@ -8,6 +8,10 @@ psutil>=5.9
 huggingface_hub>=0.24.0
 # Image / OCSR stack (matches upstream HF Space, modernized pins)
 Pillow>=10.0
+# HEIC/HEIF support so iPhone photos (default format) decode without 415.
+# Without this, mobile Safari users uploading from photo library hit a
+# silent "unsupported media type" because Pillow can't open HEIC.
+pillow-heif>=0.18.0
 opencv-python-headless==4.10.0.84
 numpy<2
 pandas>=1.5

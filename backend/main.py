@@ -41,6 +41,15 @@ from PIL import Image
 from rdkit import Chem
 from rdkit.Chem.Draw import rdMolDraw2D
 
+# HEIC/HEIF support for iPhone photos (default Apple format).  Without this
+# Pillow.Image.open() raises UnidentifiedImageError on HEIC bytes and the
+# /api/predict endpoint returns 415 silently to mobile Safari users.
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except Exception as _heif_err:  # pragma: no cover
+    register_heif_opener = None
+
 # rxn package is sibling-imported; sys.path tweak so rxn.reaction.* resolves
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
