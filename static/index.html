@@ -268,6 +268,20 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+function escapeAttr(s) {
+  // Stricter than escapeHtml — for attribute values containing potentially-
+  // multiline content (molfiles have newlines + assorted V2000 chars).
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '&#10;')
+    .replace(/\r/g, '&#13;');
+}
+
 function sanitizeSvg(svg) {
   // Defensive sanitizer (RingLeader §4b-v lesson):
   // - Allow internal #... <use> refs (RDKit relies on them)
@@ -315,7 +329,12 @@ function renderGroup(item, label) {
     const rawArr = Array.isArray(item.text) ? item.text : [item.text];
     txt = rawArr.filter(Boolean).map(s => `<div class="smiles">${escapeHtml(s)}</div>`).join('');
   }
-  const smiHtml = item.smiles ? `<div class="smiles"><span class="copy" data-copy="${escapeHtml(item.smiles)}">copy</span>${escapeHtml(item.smiles)}</div>` : '';
+  const molfileHtml = item.molfile
+    ? `<span class="copy molfile-btn" data-mol="${escapeAttr(item.molfile)}" data-name="${escapeAttr((item.smiles || 'molecule') + '.mol')}">.mol</span>`
+    : '';
+  const smiHtml = item.smiles
+    ? `<div class="smiles"><span class="copy" data-copy="${escapeHtml(item.smiles)}">copy</span>${molfileHtml}${escapeHtml(item.smiles)}</div>`
+    : '';
   const svg = item.svg ? `<div class="grp-svg">${sanitizeSvg(item.svg)}</div>` : '';
   const role = item.role ? ` <span class="cond">[${escapeHtml(item.role)}]</span>` : '';
   return `<div class="grp"><div class="grp-label">${escapeHtml(label)}${role}</div>${smiHtml}${txt}${svg}</div>`;
@@ -360,6 +379,18 @@ function renderResults(d) {
     rxnsEl.appendChild(card);
   });
   rxnsEl.addEventListener('click', (e) => {
+    const m = e.target.closest('.molfile-btn');
+    if (m) {
+      // Download .mol file (more useful than copy — most tools that consume
+      // molfiles expect them as files, not pasted into a clipboard).
+      const blob = new Blob([m.dataset.mol], { type: 'chemical/x-mdl-molfile' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = m.dataset.name; document.body.appendChild(a); a.click();
+      a.remove(); setTimeout(() => URL.revokeObjectURL(url), 500);
+      const orig = m.textContent; m.textContent = 'saved'; setTimeout(() => m.textContent = orig, 1200);
+      e.preventDefault(); return;
+    }
     const c = e.target.closest('.copy');
     if (c) { navigator.clipboard.writeText(c.dataset.copy); c.textContent = 'copied'; setTimeout(() => c.textContent = 'copy', 1200); }
   }, { once: true });

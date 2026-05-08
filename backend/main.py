@@ -117,8 +117,9 @@ def fix_svg(svg_str: str) -> str:
     return svg_str
 
 
-def smiles_to_svg(smiles: str, width: int = 300, height: int = 200) -> str | None:
-    """RingLeader §4b-vi: try RDKit normal sanitize, fall back sanitize=False."""
+def _smiles_to_mol(smiles: str):
+    """Parse SMILES with the same fallback chain as svg/molfile generators.
+    RingLeader §4b-vi: try RDKit normal sanitize, fall back sanitize=False."""
     if not smiles:
         return None
     try:
@@ -133,12 +134,45 @@ def smiles_to_svg(smiles: str, width: int = 300, height: int = 200) -> str | Non
                 )
             except Exception:
                 pass
+        return mol
+    except Exception as e:
+        log.debug("_smiles_to_mol failed for %r: %s", smiles, e)
+        return None
+
+
+def smiles_to_svg(smiles: str, width: int = 300, height: int = 200) -> str | None:
+    mol = _smiles_to_mol(smiles)
+    if mol is None:
+        return None
+    try:
         drawer = rdMolDraw2D.MolDraw2DSVG(width, height)
         drawer.DrawMolecule(mol)
         drawer.FinishDrawing()
         return fix_svg(drawer.GetDrawingText())
     except Exception as e:
         log.debug("smiles_to_svg failed for %r: %s", smiles, e)
+        return None
+
+
+def smiles_to_molfile(smiles: str) -> str | None:
+    """Convert SMILES → MDL molfile (V2000) text. Adds 2D coords first so the
+    output is renderable by other tools (ChemDraw, Marvin, etc.) rather than
+    just a connection table. Sam asked 2026-05-08 to expose this alongside SVG.
+    """
+    mol = _smiles_to_mol(smiles)
+    if mol is None:
+        return None
+    try:
+        # Compute 2D coordinates so the molfile is positionally meaningful;
+        # without this the molblock has all-zero atom coords.
+        try:
+            from rdkit.Chem import AllChem
+            AllChem.Compute2DCoords(mol)
+        except Exception:
+            pass
+        return Chem.MolToMolBlock(mol)
+    except Exception as e:
+        log.debug("smiles_to_molfile failed for %r: %s", smiles, e)
         return None
 
 
@@ -174,6 +208,7 @@ def _serialize_predictions(preds: list[Any]) -> dict:
                 'bbox': r.get('bbox'),
                 'confidence': r.get('confidence'),
                 'svg': smiles_to_svg(smi) if smi else None,
+                'molfile': smiles_to_molfile(smi) if smi else None,
             }
             reactants.append(entry)
         products = []
@@ -185,6 +220,7 @@ def _serialize_predictions(preds: list[Any]) -> dict:
                 'bbox': p.get('bbox'),
                 'confidence': p.get('confidence'),
                 'svg': smiles_to_svg(smi) if smi else None,
+                'molfile': smiles_to_molfile(smi) if smi else None,
             }
             products.append(entry)
         conditions = []
