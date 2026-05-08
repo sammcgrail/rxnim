@@ -29,6 +29,8 @@
   a:hover { text-decoration: underline; }
 
   .drop {
+    display: block;
+    width: 100%;
     border: 2px dashed #2a3140;
     border-radius: 14px;
     padding: clamp(20px, 6vw, 48px);
@@ -39,6 +41,8 @@
     min-width: 0;
     overflow: hidden;
   }
+  .drop strong { display: block; font-size: 16px; }
+  .drop p { margin-top: 8px; }
   .drop:hover, .drop.dragover { border-color: #6ea8fe; background: #161a23; }
   .drop input[type=file] { display: none; }
   .drop p { color: #8b9099; margin-top: 8px; font-size: 14px; }
