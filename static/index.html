@@ -208,11 +208,14 @@ async function handleFile(file) {
     }
   }, 100);
 
-  // 120s client-side timeout via AbortController.  Without this iOS Safari
-  // can hold a fetch open indefinitely on a slow/saturated backend and the
-  // user just sees a spinner forever.
+  // 240s client-side timeout via AbortController. Most predictions land
+  // 15-30s, but cold-start (after deploy: model load takes ~11s before
+  // the first request can even begin processing) plus a queued worker
+  // can stack up. Sam hit the prior 120s limit right after a deploy
+  // 2026-05-08; bumped to 240s to absorb cold-start + slow inference
+  // without false-failing.
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 120000);
+  const timeoutId = setTimeout(() => controller.abort(), 240000);
 
   const fd = new FormData();
   fd.append('file', file);
@@ -236,7 +239,7 @@ async function handleFile(file) {
     clearTimeout(timeoutId);
     if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
     if (e.name === 'AbortError') {
-      statusEl.innerHTML = '<span class="err">timed out after 120s &mdash; backend may be busy. <a href="javascript:location.reload()">try again</a></span>';
+      statusEl.innerHTML = '<span class="err">timed out after 240s &mdash; backend may be busy. <a href="javascript:location.reload()">try again</a></span>';
     } else {
       statusEl.innerHTML = '<span class="err">' + (e.message || 'request failed') + ' &middot; <a href="javascript:location.reload()">try again</a></span>';
     }
