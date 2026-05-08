@@ -100,6 +100,28 @@
   summary { cursor: pointer; color: #8b9099; font-size: 12px; }
   pre { background: #06080d; padding: 10px; border-radius: 8px; overflow-x: auto; color: #b9c0cb; font-size: 12px; line-height: 1.45; margin-top: 6px; }
 
+  /* Per-molecule + per-reaction expanders for molfile / rxn / rdf text. */
+  .mol-details { margin-top: 8px; }
+  .mol-details summary { padding: 4px 0; font-size: 11px; color: #8b9099; user-select: none; }
+  .mol-details summary:hover { color: #cdd5e0; }
+  .mol-actions { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .mini-btn {
+    font-size: 11px; color: #cdd5e0; cursor: pointer;
+    padding: 4px 10px; border: 1px solid #2a3140; border-radius: 5px;
+    background: #161a23; font-family: inherit; line-height: 1.2;
+  }
+  .mini-btn:hover { border-color: #6ea8fe; color: #fff; background: #1c2230; }
+  .mini-btn:active { transform: translateY(1px); }
+  .mol-block {
+    background: #06080d; padding: 8px 10px; border-radius: 6px;
+    overflow: auto; max-height: 240px;
+    color: #b9c0cb; font-size: 11px; line-height: 1.4;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    white-space: pre; margin-top: 6px;
+    user-select: text; -webkit-user-select: text;
+  }
+  .dim { color: #5b6270; font-weight: 400; font-size: 10px; }
+
   footer { margin-top: 32px; color: #5b6270; font-size: 11px; text-align: center; }
 </style>
 </head>
@@ -134,6 +156,17 @@
 
   <div class="reactions" id="reactions"></div>
 
+  <details id="rdf-details" style="display:none">
+    <summary>Reaction Data File <span class="dim">(.rdf, all reactions + conditions)</span></summary>
+    <div class="mol-actions">
+      <button type="button" id="rdf-save-btn" class="mini-btn save-blob-btn"
+              data-blob-target="rdf-block" data-blob-name="reactions.rdf"
+              data-blob-mime="chemical/x-mdl-rdfile">save .rdf</button>
+      <button type="button" class="mini-btn copy-blob-btn" data-blob-target="rdf-block">copy</button>
+    </div>
+    <pre id="rdf-block" class="mol-block"></pre>
+  </details>
+
   <details id="raw-details" style="display:none">
     <summary>Raw JSON</summary>
     <pre id="raw"></pre>
@@ -156,6 +189,9 @@ const elapsedEl = document.getElementById('elapsed');
 const rxnsEl = document.getElementById('reactions');
 const rawDetails = document.getElementById('raw-details');
 const rawEl = document.getElementById('raw');
+const rdfDetails = document.getElementById('rdf-details');
+const rdfEl = document.getElementById('rdf-block');
+const rdfSaveBtn = document.getElementById('rdf-save-btn');
 const healthEl = document.getElementById('health');
 
 let elapsedTimer = null;
@@ -329,15 +365,34 @@ function renderGroup(item, label) {
     const rawArr = Array.isArray(item.text) ? item.text : [item.text];
     txt = rawArr.filter(Boolean).map(s => `<div class="smiles">${escapeHtml(s)}</div>`).join('');
   }
-  const molfileHtml = item.molfile
-    ? `<span class="copy molfile-btn" data-mol="${escapeAttr(item.molfile)}" data-name="${escapeAttr((item.smiles || 'molecule') + '.mol')}">.mol</span>`
-    : '';
   const smiHtml = item.smiles
-    ? `<div class="smiles"><span class="copy" data-copy="${escapeHtml(item.smiles)}">copy</span>${molfileHtml}${escapeHtml(item.smiles)}</div>`
+    ? `<div class="smiles"><span class="copy" data-copy="${escapeHtml(item.smiles)}">copy</span>${escapeHtml(item.smiles)}</div>`
     : '';
   const svg = item.svg ? `<div class="grp-svg">${sanitizeSvg(item.svg)}</div>` : '';
+  // Molfile expander — each molecule gets its own collapsible <details> with
+  // the V2000 block as a <pre> + a save-as-.mol button. Replaces the old
+  // tiny ".mol" header button (which had a click-target collision on stacked
+  // cards — Sam reported the second one didn't work properly 2026-05-08).
+  let molDetails = '';
+  if (item.molfile) {
+    const fname = (item.smiles || 'molecule').replace(/[^A-Za-z0-9_.+-]+/g, '_').slice(0, 32) + '.mol';
+    const molId = 'mol_' + Math.random().toString(36).slice(2, 10);
+    molDetails = `
+      <details class="mol-details">
+        <summary>molfile <span class="dim">(V2000)</span></summary>
+        <div class="mol-actions">
+          <button type="button" class="mini-btn save-blob-btn"
+                  data-blob-target="${molId}"
+                  data-blob-name="${escapeAttr(fname)}"
+                  data-blob-mime="chemical/x-mdl-molfile">save .mol</button>
+          <button type="button" class="mini-btn copy-blob-btn"
+                  data-blob-target="${molId}">copy</button>
+        </div>
+        <pre id="${molId}" class="mol-block">${escapeHtml(item.molfile)}</pre>
+      </details>`;
+  }
   const role = item.role ? ` <span class="cond">[${escapeHtml(item.role)}]</span>` : '';
-  return `<div class="grp"><div class="grp-label">${escapeHtml(label)}${role}</div>${smiHtml}${txt}${svg}</div>`;
+  return `<div class="grp"><div class="grp-label">${escapeHtml(label)}${role}</div>${smiHtml}${txt}${svg}${molDetails}</div>`;
 }
 
 function renderResults(d) {
@@ -366,6 +421,24 @@ function renderResults(d) {
     } else if (meta.error) {
       condBadge = `<span class="verified-badge error" title="LLM refine error: ${escapeHtml(meta.error)}">&#x26A0; raw</span>`;
     }
+    let rxnDetails = '';
+    if (rx.rxn_block) {
+      const rxnId = 'rxn_' + Math.random().toString(36).slice(2, 10);
+      const fname = `reaction_${rx.reaction_id}.rxn`;
+      rxnDetails = `
+        <details class="mol-details">
+          <summary>rxn block <span class="dim">(reaction, V2000)</span></summary>
+          <div class="mol-actions">
+            <button type="button" class="mini-btn save-blob-btn"
+                    data-blob-target="${rxnId}"
+                    data-blob-name="${escapeAttr(fname)}"
+                    data-blob-mime="chemical/x-mdl-rxnfile">save .rxn</button>
+            <button type="button" class="mini-btn copy-blob-btn"
+                    data-blob-target="${rxnId}">copy</button>
+          </div>
+          <pre id="${rxnId}" class="mol-block">${escapeHtml(rx.rxn_block)}</pre>
+        </details>`;
+    }
     card.innerHTML = `
       <div class="rxn-head">
         <div class="rxn-id">Reaction ${rx.reaction_id}</div>
@@ -375,26 +448,68 @@ function renderResults(d) {
         ${reactants || '<div class="grp"><div class="grp-label">reactant</div><div class="sub">none</div></div>'}
         ${conditions ? '<div class="grp"><div class="grp-label">conditions' + condBadge + '</div>' + conditions + '</div>' : ''}
         ${products || '<div class="grp"><div class="grp-label">product</div><div class="sub">none</div></div>'}
-      </div>`;
+      </div>
+      ${rxnDetails}`;
     rxnsEl.appendChild(card);
   });
-  rxnsEl.addEventListener('click', (e) => {
-    const m = e.target.closest('.molfile-btn');
-    if (m) {
-      // Download .mol file (more useful than copy — most tools that consume
-      // molfiles expect them as files, not pasted into a clipboard).
-      const blob = new Blob([m.dataset.mol], { type: 'chemical/x-mdl-molfile' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = m.dataset.name; document.body.appendChild(a); a.click();
-      a.remove(); setTimeout(() => URL.revokeObjectURL(url), 500);
-      const orig = m.textContent; m.textContent = 'saved'; setTimeout(() => m.textContent = orig, 1200);
-      e.preventDefault(); return;
-    }
-    const c = e.target.closest('.copy');
-    if (c) { navigator.clipboard.writeText(c.dataset.copy); c.textContent = 'copied'; setTimeout(() => c.textContent = 'copy', 1200); }
-  }, { once: true });
+  // Show / wire the top-level RDF download next to the Raw JSON expander.
+  if (d.rdf) {
+    rdfEl.textContent = d.rdf;
+    rdfDetails.style.display = '';
+    rdfSaveBtn.dataset.blob = d.rdf;
+  } else {
+    rdfDetails.style.display = 'none';
+  }
 }
+
+// Page-level click delegator for save/copy buttons. Was previously attached
+// per-render with `{ once: true }` which meant only the FIRST click anywhere
+// in the reactions list ever worked — that was Sam's reported "second item
+// doesn't work" bug 2026-05-08. Single document-scoped delegator fixes it.
+document.addEventListener('click', (e) => {
+  const sb = e.target.closest('.save-blob-btn');
+  if (sb) {
+    e.preventDefault();
+    let text = '';
+    if (sb.dataset.blobTarget) {
+      const t = document.getElementById(sb.dataset.blobTarget);
+      text = t ? t.textContent : '';
+    } else if (sb.dataset.blob) {
+      text = sb.dataset.blob;
+    }
+    if (!text) return;
+    const mime = sb.dataset.blobMime || 'application/octet-stream';
+    const name = sb.dataset.blobName || 'download.txt';
+    const blob = new Blob([text], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name; document.body.appendChild(a); a.click();
+    a.remove(); setTimeout(() => URL.revokeObjectURL(url), 500);
+    const orig = sb.textContent; sb.textContent = 'saved'; setTimeout(() => sb.textContent = orig, 1200);
+    return;
+  }
+  const cb = e.target.closest('.copy-blob-btn');
+  if (cb) {
+    e.preventDefault();
+    let text = '';
+    if (cb.dataset.blobTarget) {
+      const t = document.getElementById(cb.dataset.blobTarget);
+      text = t ? t.textContent : '';
+    }
+    if (!text) return;
+    navigator.clipboard.writeText(text).catch(() => {});
+    const orig = cb.textContent; cb.textContent = 'copied'; setTimeout(() => cb.textContent = orig, 1200);
+    return;
+  }
+  const c = e.target.closest('.copy');
+  if (c) {
+    if (c.dataset.copy) {
+      navigator.clipboard.writeText(c.dataset.copy).catch(() => {});
+      const orig = c.textContent; c.textContent = 'copied';
+      setTimeout(() => c.textContent = orig, 1200);
+    }
+  }
+});
 </script>
 </body>
 </html>

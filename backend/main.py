@@ -29,6 +29,7 @@ import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -174,6 +175,89 @@ def smiles_to_molfile(smiles: str) -> str | None:
     except Exception as e:
         log.debug("smiles_to_molfile failed for %r: %s", smiles, e)
         return None
+
+
+def reaction_to_rxnblock(reactant_smiles: list[str], product_smiles: list[str]) -> str | None:
+    """Build an MDL RXN block (V2000) from a list of reactant SMILES and a
+    list of product SMILES. Single-reaction format, suitable for ChemDraw,
+    Marvin, RDKit downstream consumers.
+    """
+    try:
+        from rdkit.Chem import AllChem
+        rxn = AllChem.ChemicalReaction()
+        ok_any = False
+        for s in reactant_smiles or []:
+            mol = _smiles_to_mol(s)
+            if mol is None:
+                continue
+            try:
+                AllChem.Compute2DCoords(mol)
+            except Exception:
+                pass
+            rxn.AddReactantTemplate(mol)
+            ok_any = True
+        for s in product_smiles or []:
+            mol = _smiles_to_mol(s)
+            if mol is None:
+                continue
+            try:
+                AllChem.Compute2DCoords(mol)
+            except Exception:
+                pass
+            rxn.AddProductTemplate(mol)
+            ok_any = True
+        if not ok_any:
+            return None
+        return AllChem.ReactionToRxnBlock(rxn)
+    except Exception as e:
+        log.debug("reaction_to_rxnblock failed: %s", e)
+        return None
+
+
+def reactions_to_rdf(serialized_reactions: list[dict], source_image_dims: tuple[int, int] | None = None) -> str:
+    """Build an MDL RDF (Reaction Data File) text combining all extracted
+    reactions plus their conditions/metadata. RDF is the multi-reaction
+    archive format — each reaction gets a $RXN block + $DTYPE/$DATUM lines
+    for any condition strings or refinement notes.
+
+    Spec: https://discover.3ds.com/sites/default/files/2020-08/biovia_ctfileformats_2020.pdf
+    """
+    parts = ["$RDFILE 1", "$DATM " + datetime.now(timezone.utc).strftime("%m/%d/%Y %H:%M")]
+    if source_image_dims:
+        w, h = source_image_dims
+        parts.append(f"$DTYPE source_image_dims")
+        parts.append(f"$DATUM {w}x{h}")
+    for rxn in serialized_reactions:
+        rid = rxn.get('reaction_id')
+        reactant_smiles = [r.get('smiles') for r in rxn.get('reactants', []) if r.get('smiles')]
+        product_smiles = [p.get('smiles') for p in rxn.get('products', []) if p.get('smiles')]
+        rxn_block = reaction_to_rxnblock(reactant_smiles, product_smiles)
+        if not rxn_block:
+            continue
+        parts.append(f"$RFMT $RIREG {rid}")
+        parts.append(rxn_block.rstrip())
+        # Emit conditions / refinement metadata as $DTYPE/$DATUM pairs.
+        cond_strs: list[str] = []
+        for c in rxn.get('conditions', []) or []:
+            ref = c.get('text_refined')
+            if isinstance(ref, list):
+                cond_strs.extend(str(s) for s in ref if s)
+            elif ref:
+                cond_strs.append(str(ref))
+            else:
+                txt = c.get('text')
+                if isinstance(txt, list):
+                    cond_strs.extend(str(s) for s in txt if s)
+                elif txt:
+                    cond_strs.append(str(txt))
+        for i, cs in enumerate(cond_strs, start=1):
+            parts.append(f"$DTYPE condition_{i}")
+            parts.append(f"$DATUM {cs}")
+        meta = rxn.get('llm_meta') or {}
+        if meta.get('refined_by'):
+            parts.append(f"$DTYPE llm_refined_by")
+            parts.append(f"$DATUM {meta['refined_by']}")
+    return "\n".join(parts) + "\n"
 
 
 def _detect_mime(data: bytes, fallback_filename: str = "") -> str | None:
@@ -508,8 +592,17 @@ async def api_predict(file: UploadFile = File(...)):
         elapsed_ms = int((time.time() - t_start) * 1000)
         result["processing_time_ms"] = elapsed_ms
         result["model_version"] = "rxnim-pix2seq-cpu"
-        result["image_dims"] = list(Image.open(tmp_path).size)
+        image_dims = list(Image.open(tmp_path).size)
+        result["image_dims"] = image_dims
         result["llm_refine_enabled"] = LLM_ENABLED
+        # Per-reaction RXN block (single reaction, V2000) for ChemDraw etc.
+        for rxn in result.get("reactions", []):
+            r_smis = [r.get("smiles") for r in rxn.get("reactants", []) if r.get("smiles")]
+            p_smis = [p.get("smiles") for p in rxn.get("products", []) if p.get("smiles")]
+            rxn["rxn_block"] = reaction_to_rxnblock(r_smis, p_smis)
+        # Top-level RDF (Reaction Data File) — multi-reaction archive plus
+        # condition / refinement metadata as $DTYPE/$DATUM pairs.
+        result["rdf"] = reactions_to_rdf(result.get("reactions", []), source_image_dims=tuple(image_dims))
         return result
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail="inference timeout")
