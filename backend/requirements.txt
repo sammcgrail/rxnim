@@ -1,0 +1,26 @@
+# rxnim backend deps - CPU only.
+# torch + torchvision installed separately via pytorch.org/whl/cpu in Dockerfile.
+fastapi==0.115.0
+uvicorn[standard]==0.30.0
+python-multipart==0.0.9
+pydantic>=2.0
+psutil>=5.9
+huggingface_hub>=0.24.0
+# Image / OCSR stack (matches upstream HF Space, modernized pins)
+Pillow>=10.0
+opencv-python-headless==4.10.0.84
+numpy<2
+pandas>=1.5
+matplotlib>=3.5
+rdkit-pypi>=2022.9.2
+albumentations==1.1.0
+SmilesPE==0.0.3
+OpenNMT-py==2.2.0
+timm==0.5.4
+pycocotools>=2.0.4
+easyocr>=1.7
+# RxnIM Pix2Seq decoder uses pytorch_lightning's torch.load metadata
+pytorch-lightning>=1.8.6
+# transformers - upstream pins a specific commit, but the rxn package only
+# needs basic encoder/utils.  Pin a recent stable that won't drift.
+transformers>=4.30,<5

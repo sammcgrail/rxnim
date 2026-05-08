@@ -1,0 +1,21 @@
+# Keep the Docker build context small.
+# We only need upstream/rxn/ and upstream/molscribe/ at build time.
+upstream/.git
+upstream/.gitattributes
+upstream/mllm
+upstream/detr
+upstream/prompts
+upstream/examples
+upstream/app.py
+upstream/rxnim.py
+upstream/getReaction.py
+upstream/README.md
+upstream/requirements.txt
+**/__pycache__
+**/*.pyc
+*.log
+.DS_Store
+.git
+.gitignore
+data
+test_results

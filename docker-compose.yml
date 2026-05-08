@@ -1,0 +1,28 @@
+services:
+  rxnim:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rxnim
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:20040:8000"
+    volumes:
+      # cache for huggingface_hub downloads + easyocr models so a rebuild
+      # doesn't re-pull (improvement #3 from plan review)
+      - rxnim_models:/root/.cache
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8000/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  rxnim_models:

@@ -1,0 +1,9 @@
+# Local data / outputs
+*.log
+__pycache__/
+*.pyc
+.DS_Store
+test_results/
+.env
+.venv/
+data/

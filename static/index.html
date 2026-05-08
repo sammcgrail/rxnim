@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>rxnim - chemistry reaction image parser</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b0d12">
+<meta name="description" content="Self-hosted CPU-only chemistry reaction image parser - extracts SMILES, conditions, products from reaction-scheme images.">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; touch-action: manipulation; }
+  html { background: #0b0d12; }
+  input, select, textarea, button { font-size: 16px; touch-action: auto; font-family: inherit; }
+  body {
+    background: #0b0d12;
+    color: #e6e8eb;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", system-ui, sans-serif;
+    line-height: 1.45;
+    min-height: 100dvh;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: clamp(16px, 4vw, 32px); }
+  header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 18px; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: clamp(20px, 4vw, 28px); font-weight: 700; letter-spacing: -0.02em; }
+  .sub { color: #8b9099; font-size: 13px; }
+  a { color: #6ea8fe; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .drop {
+    border: 2px dashed #2a3140;
+    border-radius: 14px;
+    padding: clamp(20px, 6vw, 48px);
+    text-align: center;
+    cursor: pointer;
+    background: #11141b;
+    transition: border-color 120ms, background 120ms;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .drop:hover, .drop.dragover { border-color: #6ea8fe; background: #161a23; }
+  .drop input[type=file] { display: none; }
+  .drop p { color: #8b9099; margin-top: 8px; font-size: 14px; }
+  .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; background: #1c2230; color: #b9c0cb; font-size: 12px; margin-right: 6px; }
+
+  .preview-row { display: grid; grid-template-columns: 1fr; gap: 16px; margin-top: 16px; }
+  @media (min-width: 720px) { .preview-row { grid-template-columns: 1fr 1fr; } }
+  .panel { background: #11141b; border: 1px solid #1f2532; border-radius: 12px; padding: 14px; min-width: 0; overflow: hidden; }
+  .panel h3 { font-size: 13px; color: #8b9099; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; font-weight: 600; }
+  .preview img { width: 100%; max-height: 320px; object-fit: contain; border-radius: 8px; background: #fff; }
+
+  .status { margin-top: 16px; min-height: 24px; font-size: 14px; }
+  .spinner {
+    display: inline-block; width: 14px; height: 14px;
+    border: 2px solid #2a3140; border-top-color: #6ea8fe;
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+    vertical-align: -2px; margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .err { color: #ff6b6b; }
+  .ok { color: #5fd07b; }
+
+  .reactions { margin-top: 18px; display: grid; gap: 12px; }
+  .rxn { background: #11141b; border: 1px solid #1f2532; border-radius: 12px; padding: 14px; min-width: 0; overflow: hidden; }
+  .rxn-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .rxn-id { font-weight: 600; color: #6ea8fe; }
+  .arrow { color: #8b9099; font-size: 18px; padding: 0 6px; }
+  .row { display: grid; gap: 10px; align-items: center; }
+  .grp { background: #161a23; border: 1px solid #1f2532; border-radius: 10px; padding: 10px; min-width: 0; overflow: hidden; }
+  .grp-label { color: #8b9099; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+  .grp-svg svg { max-width: 100%; height: auto; }
+  .grp-svg { background: #fff; border-radius: 6px; padding: 6px; margin-top: 6px; }
+  .smiles { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; color: #b9c0cb; word-break: break-all; }
+  .copy { float: right; font-size: 11px; color: #8b9099; cursor: pointer; padding: 2px 6px; border: 1px solid #1f2532; border-radius: 4px; background: #11141b; }
+  .copy:hover { color: #fff; }
+  .cond { color: #f0a868; }
+  details { margin-top: 14px; }
+  summary { cursor: pointer; color: #8b9099; font-size: 12px; }
+  pre { background: #06080d; padding: 10px; border-radius: 8px; overflow-x: auto; color: #b9c0cb; font-size: 12px; line-height: 1.45; margin-top: 6px; }
+
+  footer { margin-top: 32px; color: #5b6270; font-size: 11px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>rxnim</h1>
+      <div class="sub">chemistry reaction image &rarr; SMILES &middot; CPU inference</div>
+    </div>
+    <div class="sub" id="health">checking&hellip;</div>
+  </header>
+
+  <label class="drop" id="drop" tabindex="0">
+    <input type="file" id="file" accept="image/*">
+    <strong>Drop a reaction image here, paste, or tap to choose</strong>
+    <p>PNG, JPG, WebP up to 10 MB &middot; CPU inference &middot; 5&ndash;30s typical</p>
+    <p style="margin-top:8px"><span class="pill">Pix2Seq</span><span class="pill">MolScribe</span><span class="pill">EasyOCR</span></p>
+  </label>
+
+  <div class="preview-row" id="preview-row" style="display:none">
+    <div class="panel preview">
+      <h3>Input</h3>
+      <img id="preview" alt="">
+    </div>
+    <div class="panel">
+      <h3>Status</h3>
+      <div id="status" class="status"></div>
+      <div class="sub" id="elapsed"></div>
+    </div>
+  </div>
+
+  <div class="reactions" id="reactions"></div>
+
+  <details id="raw-details" style="display:none">
+    <summary>Raw JSON</summary>
+    <pre id="raw"></pre>
+  </details>
+
+  <footer>
+    <a href="/api/health">/api/health</a> &middot;
+    <a href="https://github.com/CYF2000127/RxnIM" target="_blank" rel="noopener">upstream RxnIM</a> &middot;
+    self-hosted on sebland.com
+  </footer>
+</div>
+
+<script>
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('file');
+const previewRow = document.getElementById('preview-row');
+const previewImg = document.getElementById('preview');
+const statusEl = document.getElementById('status');
+const elapsedEl = document.getElementById('elapsed');
+const rxnsEl = document.getElementById('reactions');
+const rawDetails = document.getElementById('raw-details');
+const rawEl = document.getElementById('raw');
+const healthEl = document.getElementById('health');
+
+let elapsedTimer = null;
+
+async function checkHealth() {
+  try {
+    const r = await fetch('/api/health');
+    const d = await r.json();
+    if (d.model_loaded) {
+      healthEl.innerHTML = '<span class="ok">model loaded</span> &middot; ' + d.rss_gb.toFixed(2) + 'GB RSS';
+    } else {
+      healthEl.innerHTML = '<span class="err">model not loaded: ' + (d.model_error || '?') + '</span>';
+    }
+  } catch (e) { healthEl.innerHTML = '<span class="err">health check failed</span>'; }
+}
+checkHealth();
+
+drop.addEventListener('click', () => fileInput.click());
+drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('dragover'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('dragover'); }));
+drop.addEventListener('drop', (e) => { if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', (e) => { if (e.target.files.length) handleFile(e.target.files[0]); });
+window.addEventListener('paste', (e) => {
+  for (const item of e.clipboardData.items) {
+    if (item.type.startsWith('image/')) { handleFile(item.getAsFile()); return; }
+  }
+});
+
+async function handleFile(file) {
+  if (!file || !file.type.startsWith('image/')) {
+    statusEl.innerHTML = '<span class="err">not an image</span>';
+    return;
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    statusEl.innerHTML = '<span class="err">file too large (max 10 MB)</span>';
+    return;
+  }
+
+  previewRow.style.display = '';
+  previewImg.src = URL.createObjectURL(file);
+  rxnsEl.innerHTML = '';
+  rawDetails.style.display = 'none';
+  statusEl.innerHTML = '<span class="spinner"></span>processing&hellip;';
+  const t0 = performance.now();
+  if (elapsedTimer) clearInterval(elapsedTimer);
+  elapsedTimer = setInterval(() => {
+    elapsedEl.textContent = ((performance.now() - t0) / 1000).toFixed(1) + 's elapsed';
+  }, 100);
+
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const r = await fetch('/api/predict', { method: 'POST', body: fd });
+    const t1 = performance.now();
+    if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+    elapsedEl.textContent = ((t1 - t0) / 1000).toFixed(2) + 's';
+    if (!r.ok) {
+      const detail = await r.json().catch(() => ({}));
+      statusEl.innerHTML = '<span class="err">' + r.status + ' ' + (detail.detail || r.statusText) + '</span>';
+      return;
+    }
+    const d = await r.json();
+    renderResults(d);
+    statusEl.innerHTML = '<span class="ok">found ' + (d.reactions?.length || 0) + ' reaction(s)</span>';
+  } catch (e) {
+    if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+    statusEl.innerHTML = '<span class="err">' + e.message + '</span>';
+  }
+}
+
+function escapeHtml(s) {
+  return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function sanitizeSvg(svg) {
+  // Defensive sanitizer (RingLeader §4b-v lesson):
+  // - Allow internal #... <use> refs (RDKit relies on them)
+  // - Strip on*, javascript:, data: hrefs
+  if (!svg) return '';
+  if (typeof DOMParser === 'undefined') {
+    return svg.replace(/on\w+="[^"]*"/g, '').replace(/href="(?:javascript|data):[^"]*"/g, '');
+  }
+  const doc = new DOMParser().parseFromString(svg, 'image/svg+xml');
+  const walk = (el) => {
+    [...el.attributes || []].forEach(a => {
+      if (a.name.toLowerCase().startsWith('on')) el.removeAttribute(a.name);
+      if ((a.name === 'href' || a.name === 'xlink:href') && /^(javascript|data):/i.test(a.value)) el.removeAttribute(a.name);
+    });
+    if (el.tagName && el.tagName.toLowerCase() === 'use') {
+      const href = (el.getAttribute('href') || el.getAttribute('xlink:href') || '').trim();
+      if (!href.startsWith('#')) { el.remove(); return; }
+    }
+    if (el.tagName && ['script','foreignobject'].includes(el.tagName.toLowerCase())) { el.remove(); return; }
+    [...el.children || []].forEach(walk);
+  };
+  walk(doc.documentElement);
+  return new XMLSerializer().serializeToString(doc.documentElement);
+}
+
+function renderGroup(item, label) {
+  const smi = item.smiles || item.text || '';
+  const txt = item.text ? `<div class="smiles">${escapeHtml(item.text)}</div>` : '';
+  const smiHtml = item.smiles ? `<div class="smiles"><span class="copy" data-copy="${escapeHtml(item.smiles)}">copy</span>${escapeHtml(item.smiles)}</div>` : '';
+  const svg = item.svg ? `<div class="grp-svg">${sanitizeSvg(item.svg)}</div>` : '';
+  const role = item.role ? ` <span class="cond">[${escapeHtml(item.role)}]</span>` : '';
+  return `<div class="grp"><div class="grp-label">${escapeHtml(label)}${role}</div>${smiHtml}${txt}${svg}</div>`;
+}
+
+function renderResults(d) {
+  rawDetails.style.display = '';
+  rawEl.textContent = JSON.stringify(d, null, 2);
+  rxnsEl.innerHTML = '';
+  if (!d.reactions || d.reactions.length === 0) {
+    rxnsEl.innerHTML = '<div class="rxn"><div class="sub">No reactions detected. The model expects a reaction-scheme image with arrows and condition labels.</div></div>';
+    return;
+  }
+  d.reactions.forEach(rx => {
+    const card = document.createElement('div');
+    card.className = 'rxn';
+    const reactants = (rx.reactants || []).map(r => renderGroup(r, 'reactant')).join('');
+    const conditions = (rx.conditions || []).map(c => renderGroup(c, 'condition')).join('');
+    const products = (rx.products || []).map(p => renderGroup(p, 'product')).join('');
+    card.innerHTML = `
+      <div class="rxn-head">
+        <div class="rxn-id">Reaction ${rx.reaction_id}</div>
+        <div class="sub">${(rx.reactants||[]).length} R &middot; ${(rx.conditions||[]).length} C &middot; ${(rx.products||[]).length} P</div>
+      </div>
+      <div class="row">
+        ${reactants || '<div class="grp"><div class="grp-label">reactant</div><div class="sub">none</div></div>'}
+        ${conditions ? '<div class="grp"><div class="grp-label">conditions</div>' + conditions + '</div>' : ''}
+        ${products || '<div class="grp"><div class="grp-label">product</div><div class="sub">none</div></div>'}
+      </div>`;
+    rxnsEl.appendChild(card);
+  });
+  rxnsEl.addEventListener('click', (e) => {
+    const c = e.target.closest('.copy');
+    if (c) { navigator.clipboard.writeText(c.dataset.copy); c.textContent = 'copied'; setTimeout(() => c.textContent = 'copy', 1200); }
+  }, { once: true });
+}
+</script>
+</body>
+</html>
