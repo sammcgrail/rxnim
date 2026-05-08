@@ -17,6 +17,13 @@ services:
       resources:
         limits:
           memory: 6G
+    environment:
+      # OpenRouter key for LLM-backed OCR refinement.  Read from host env at
+      # `docker compose up` time — DO NOT hardcode.  /root/seb/.env exports
+      # this via systemd seb.service environment, and `docker compose` will
+      # honour it as long as the var is set in the shell at compose-up time.
+      # The container falls back gracefully if unset (LLM_ENABLED=False).
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost:8000/healthz || exit 1"]
       interval: 30s

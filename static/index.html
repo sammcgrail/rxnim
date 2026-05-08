@@ -79,6 +79,23 @@
   .copy { float: right; font-size: 11px; color: #8b9099; cursor: pointer; padding: 2px 6px; border: 1px solid #1f2532; border-radius: 4px; background: #11141b; }
   .copy:hover { color: #fff; }
   .cond { color: #f0a868; }
+  .verified-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(95, 208, 123, 0.08);
+    border: 1px solid rgba(95, 208, 123, 0.25);
+    color: #94a3b8;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    vertical-align: 1px;
+    opacity: 0.85;
+  }
+  .verified-badge.error { color: #b97a7a; background: rgba(255, 107, 107, 0.06); border-color: rgba(255, 107, 107, 0.2); }
+  .text-refined { color: #cdd5e0; }
+  .text-raw { color: #6b7280; font-size: 11px; text-decoration: line-through; opacity: 0.7; }
   details { margin-top: 14px; }
   summary { cursor: pointer; color: #8b9099; font-size: 12px; }
   pre { background: #06080d; padding: 10px; border-radius: 8px; overflow-x: auto; color: #b9c0cb; font-size: 12px; line-height: 1.45; margin-top: 6px; }
@@ -278,7 +295,26 @@ function sanitizeSvg(svg) {
 
 function renderGroup(item, label) {
   const smi = item.smiles || item.text || '';
-  const txt = item.text ? `<div class="smiles">${escapeHtml(item.text)}</div>` : '';
+  // Render text: if LLM refinement produced cleaned strings and they differ
+  // from the raw OCR, show the cleaned text plus a small strike-through of
+  // the raw original for transparency.
+  let txt = '';
+  if (item.text_refined && item.text_refined.length) {
+    const cleaned = item.text_refined.map(s => `<div class="smiles text-refined">${escapeHtml(s)}</div>`).join('');
+    let raw = '';
+    if (item.text) {
+      const rawArr = Array.isArray(item.text) ? item.text : [item.text];
+      const rawJoined = rawArr.filter(Boolean).join(' / ');
+      const refinedJoined = item.text_refined.join(' / ');
+      if (rawJoined && rawJoined !== refinedJoined) {
+        raw = `<div class="smiles text-raw">${escapeHtml(rawJoined)}</div>`;
+      }
+    }
+    txt = cleaned + raw;
+  } else if (item.text) {
+    const rawArr = Array.isArray(item.text) ? item.text : [item.text];
+    txt = rawArr.filter(Boolean).map(s => `<div class="smiles">${escapeHtml(s)}</div>`).join('');
+  }
   const smiHtml = item.smiles ? `<div class="smiles"><span class="copy" data-copy="${escapeHtml(item.smiles)}">copy</span>${escapeHtml(item.smiles)}</div>` : '';
   const svg = item.svg ? `<div class="grp-svg">${sanitizeSvg(item.svg)}</div>` : '';
   const role = item.role ? ` <span class="cond">[${escapeHtml(item.role)}]</span>` : '';
@@ -299,6 +335,18 @@ function renderResults(d) {
     const reactants = (rx.reactants || []).map(r => renderGroup(r, 'reactant')).join('');
     const conditions = (rx.conditions || []).map(c => renderGroup(c, 'condition')).join('');
     const products = (rx.products || []).map(p => renderGroup(p, 'product')).join('');
+    // LLM-refined badge for the conditions header.  Only show when the
+    // refinement step actually ran with a real model id (not "fallback-*"
+    // or "skip-empty"); otherwise leave the conditions group unbadged.
+    const meta = rx.llm_meta || {};
+    let condBadge = '';
+    if (meta.refined_by && !/^(fallback|skip)/.test(meta.refined_by)) {
+      const cost = (typeof meta.cost_usd === 'number') ? ` &middot; $${meta.cost_usd.toFixed(5)}` : '';
+      const cached = meta.cached ? ' &middot; cached' : '';
+      condBadge = `<span class="verified-badge" title="OCR conditions refined by ${escapeHtml(meta.refined_by)}${cached}${cost ? ' (cost ' + cost.replace(/&middot;/g,'').trim() + ')' : ''}">&#x2713; verified</span>`;
+    } else if (meta.error) {
+      condBadge = `<span class="verified-badge error" title="LLM refine error: ${escapeHtml(meta.error)}">&#x26A0; raw</span>`;
+    }
     card.innerHTML = `
       <div class="rxn-head">
         <div class="rxn-id">Reaction ${rx.reaction_id}</div>
@@ -306,7 +354,7 @@ function renderResults(d) {
       </div>
       <div class="row">
         ${reactants || '<div class="grp"><div class="grp-label">reactant</div><div class="sub">none</div></div>'}
-        ${conditions ? '<div class="grp"><div class="grp-label">conditions</div>' + conditions + '</div>' : ''}
+        ${conditions ? '<div class="grp"><div class="grp-label">conditions' + condBadge + '</div>' + conditions + '</div>' : ''}
         ${products || '<div class="grp"><div class="grp-label">product</div><div class="sub">none</div></div>'}
       </div>`;
     rxnsEl.appendChild(card);

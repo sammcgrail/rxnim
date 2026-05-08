@@ -55,6 +55,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from rxn.reaction import Reaction  # noqa: E402
 
+# llm_refine is a sibling module in backend/.  uvicorn launches us as
+# `backend.main:app` so backend is the package; absolute import works.
+from backend.llm_refine import (  # noqa: E402
+    LLM_ENABLED,
+    OPENROUTER_MODEL,
+    cache_stats as llm_cache_stats,
+    refine_with_claude,
+)
+
 # ---------- Logging ------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
@@ -195,6 +204,145 @@ def _serialize_predictions(preds: list[Any]) -> dict:
     return {'reactions': out_reactions}
 
 
+def _reaction_union_bbox(rxn: dict) -> tuple[float, float, float, float] | None:
+    """Compute union (x1, y1, x2, y2) over all bboxes in a reaction dict.
+
+    Returns None if no bboxes are present.  Missing or malformed bboxes are
+    skipped silently.
+    """
+    xs1, ys1, xs2, ys2 = [], [], [], []
+    for key in ("reactants", "conditions", "products"):
+        for entry in rxn.get(key, []) or []:
+            bb = entry.get("bbox")
+            if not bb or len(bb) != 4:
+                continue
+            try:
+                x1, y1, x2, y2 = (float(v) for v in bb)
+            except (TypeError, ValueError):
+                continue
+            xs1.append(x1)
+            ys1.append(y1)
+            xs2.append(x2)
+            ys2.append(y2)
+    if not xs1:
+        return None
+    return (min(xs1), min(ys1), max(xs2), max(ys2))
+
+
+def _crop_reaction_png(full_image: Image.Image, bbox: tuple[float, float, float, float] | None,
+                        pad_frac: float = 0.04, max_dim: int = 1024) -> bytes:
+    """Crop image to bbox with small padding, downscale if huge, return PNG bytes."""
+    W, H = full_image.size
+    if bbox is None:
+        crop_img = full_image
+    else:
+        x1, y1, x2, y2 = bbox
+        # Pad
+        pad_x = (x2 - x1) * pad_frac
+        pad_y = (y2 - y1) * pad_frac
+        cx1 = max(0, int(x1 - pad_x))
+        cy1 = max(0, int(y1 - pad_y))
+        cx2 = min(W, int(x2 + pad_x))
+        cy2 = min(H, int(y2 + pad_y))
+        if cx2 - cx1 < 8 or cy2 - cy1 < 8:
+            crop_img = full_image  # bbox absurdly small; fall back to full
+        else:
+            crop_img = full_image.crop((cx1, cy1, cx2, cy2))
+    # Downscale long-edge to keep token cost predictable (image tokens scale
+    # with pixel area on Anthropic vision).
+    cw, ch = crop_img.size
+    long_edge = max(cw, ch)
+    if long_edge > max_dim:
+        scale = max_dim / long_edge
+        crop_img = crop_img.resize((max(1, int(cw * scale)), max(1, int(ch * scale))), Image.LANCZOS)
+    buf = io.BytesIO()
+    crop_img.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
+
+
+async def _refine_reactions(serialized: dict, full_image: Image.Image) -> None:
+    """Mutates `serialized` in-place: cleans up condition text via LLM where possible.
+
+    Adds `llm_meta` per reaction with refined_by/notes/cost_usd.  Adds a
+    `refined` field on each condition entry to mark which were touched.
+    """
+    if not LLM_ENABLED:
+        for rxn in serialized.get("reactions", []):
+            rxn["llm_meta"] = {"refined_by": None, "reason": "llm_disabled"}
+        return
+
+    refine_tasks = []
+    rxns = serialized.get("reactions", [])
+    for rxn in rxns:
+        conds = rxn.get("conditions", []) or []
+        # Gather unique non-empty raw OCR strings
+        raw_strings: list[str] = []
+        for c in conds:
+            t = c.get("text")
+            if isinstance(t, list):
+                # EasyOCR detail=0 returns list[str]; concatenate
+                for s in t:
+                    s = (s or "").strip()
+                    if s:
+                        raw_strings.append(s)
+            elif isinstance(t, str):
+                s = t.strip()
+                if s:
+                    raw_strings.append(s)
+        if not raw_strings:
+            rxn["llm_meta"] = {"refined_by": None, "reason": "no_ocr_strings"}
+            continue
+        bbox = _reaction_union_bbox(rxn)
+        try:
+            crop_bytes = _crop_reaction_png(full_image, bbox)
+        except Exception as e:
+            log.warning("crop failed (rxn %s): %s", rxn.get("reaction_id"), e)
+            rxn["llm_meta"] = {"refined_by": None, "error": f"crop: {e}"}
+            continue
+        smiles_dict = {
+            "reactants": [r.get("smiles") for r in (rxn.get("reactants") or []) if r.get("smiles")],
+            "products": [p.get("smiles") for p in (rxn.get("products") or []) if p.get("smiles")],
+        }
+        refine_tasks.append((rxn, raw_strings, refine_with_claude(crop_bytes, raw_strings, smiles_dict)))
+
+    if not refine_tasks:
+        return
+
+    results = await asyncio.gather(*(t[2] for t in refine_tasks), return_exceptions=True)
+
+    for (rxn, raw_strings, _coro), result in zip(refine_tasks, results):
+        if isinstance(result, BaseException):
+            log.warning("llm_refine raised: %s", result)
+            rxn["llm_meta"] = {"refined_by": None, "error": f"{type(result).__name__}: {result}"}
+            continue
+        cleaned: list[str] = result.get("conditions") or []
+        rxn["llm_meta"] = {
+            "refined_by": result.get("model_used"),
+            "notes": result.get("notes"),
+            "cost_usd": result.get("cost_usd"),
+            "cached": result.get("cached", False),
+            "latency_ms": result.get("latency_ms"),
+            "raw": raw_strings,
+        }
+        if "error" in result:
+            rxn["llm_meta"]["error"] = result["error"]
+        # Mark refined: replace text values where we can map raw->cleaned 1:1.
+        # If counts match, zip; otherwise attach cleaned strings to the first
+        # condition entry as a list for the UI to show.
+        conds = rxn.get("conditions", []) or []
+        if cleaned and conds:
+            if len(cleaned) == len(raw_strings) and len(raw_strings) >= len(conds):
+                # Distribute cleaned strings back: for now, put all cleaned
+                # into the first condition; UI can render the array.
+                conds[0]["text_refined"] = cleaned
+                conds[0]["refined"] = True
+            else:
+                conds[0]["text_refined"] = cleaned
+                conds[0]["refined"] = True
+            for c in conds:
+                c.setdefault("refined", False)
+
+
 async def _run_in_executor_tracked(fn, *args, timeout_s: float = PREDICT_TIMEOUT_S):
     global _queue_active, _queue_waiting
     loop = asyncio.get_running_loop()
@@ -263,6 +411,9 @@ async def api_health():
         "rss_gb": round(_get_rss_gb(), 3),
         "queue": {"active": _queue_active, "waiting": _queue_waiting, "max": MAX_WORKERS},
         "version": app.version,
+        "llm_refine_enabled": LLM_ENABLED,
+        "llm_refine_model": OPENROUTER_MODEL if LLM_ENABLED else None,
+        "llm_refine_cache": llm_cache_stats() if LLM_ENABLED else None,
     }
 
 
@@ -300,10 +451,29 @@ async def api_predict(file: UploadFile = File(...)):
 
     try:
         result = await _run_in_executor_tracked(_do_predict, str(tmp_path))
+        # LLM refinement (OpenRouter -> Claude Haiku 4.5).  Runs in main async
+        # loop, not the executor — the OpenAI client is async and we want to
+        # parallelize multi-reaction images without burning extra CPU threads.
+        if LLM_ENABLED and result.get("reactions"):
+            try:
+                full_image = Image.open(tmp_path)
+                full_image = ensure_rgb(full_image)
+                # 30s soft cap on the whole refinement step, regardless of how
+                # many reactions are in the image.
+                await asyncio.wait_for(_refine_reactions(result, full_image), timeout=30.0)
+            except asyncio.TimeoutError:
+                log.warning("llm refinement timed out (>30s); returning raw")
+                for rxn in result.get("reactions", []):
+                    rxn.setdefault("llm_meta", {"refined_by": None, "error": "timeout"})
+            except Exception as e:
+                log.warning("llm refinement failed: %s", e)
+                for rxn in result.get("reactions", []):
+                    rxn.setdefault("llm_meta", {"refined_by": None, "error": str(e)})
         elapsed_ms = int((time.time() - t_start) * 1000)
         result["processing_time_ms"] = elapsed_ms
         result["model_version"] = "rxnim-pix2seq-cpu"
         result["image_dims"] = list(Image.open(tmp_path).size)
+        result["llm_refine_enabled"] = LLM_ENABLED
         return result
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail="inference timeout")

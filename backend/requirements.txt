@@ -28,3 +28,7 @@ pytorch-lightning>=1.8.6
 # transformers - upstream pins a specific commit, but the rxn package only
 # needs basic encoder/utils.  Pin a recent stable that won't drift.
 transformers>=4.30,<5
+# LLM-based OCR cleanup via OpenRouter (Claude Haiku 4.5, vision).
+# Uses the OpenAI-compatible chat-completions interface — see
+# backend/llm_refine.py.  No standalone Anthropic SDK needed.
+openai>=1.40

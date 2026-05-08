@@ -45,8 +45,12 @@ COPY upstream/molscribe /app/molscribe
 COPY backend/download_model.py /app/backend/download_model.py
 RUN python /app/backend/download_model.py
 
-# Backend code last - changes here don't blow away the model layer
+# Backend code last - changes here don't blow away the model layer.
+# llm_refine.py is sibling to main.py and imported as backend.llm_refine.
 COPY backend/main.py /app/backend/main.py
+COPY backend/llm_refine.py /app/backend/llm_refine.py
+# Make backend a proper package so `from backend.llm_refine` works
+RUN touch /app/backend/__init__.py
 
 # Frontend
 COPY static /app/static
