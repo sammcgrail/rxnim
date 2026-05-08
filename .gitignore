@@ -7,3 +7,6 @@ test_results/
 .env
 .venv/
 data/
+# CF Origin Cert key (private) - re-issue from CF if lost
+cf-origin.key
+cf-origin.pem

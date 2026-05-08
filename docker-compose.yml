@@ -6,7 +6,9 @@ services:
     container_name: rxnim
     restart: unless-stopped
     ports:
-      - "127.0.0.1:20040:8000"
+      # Bind to all interfaces so box-web's host.docker.internal can reach us
+      # (matches the pattern of tonykudo, ringleader, mptodo on this box).
+      - "20040:8000"
     volumes:
       # cache for huggingface_hub downloads + easyocr models so a rebuild
       # doesn't re-pull (improvement #3 from plan review)
