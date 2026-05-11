@@ -7,23 +7,40 @@
       <stop offset="100%" stop-color="#3a78d4"/>
     </linearGradient>
   </defs>
-  <!-- Simplified mark for 32–128 px use. No -OH text (unreadable at small
-       size). Strokes tuned thinner than v1 for breathing room. -->
+  <!-- Simplified mark for 32–128 px use. Kekulé benzene + magnifier, no OH
+       (unreadable at small sizes). Strokes scaled up for legibility.
 
-  <!-- Benzene: vertex-up, centre (98,130), R=52 -->
-  <g stroke-linecap="round" stroke-linejoin="round">
-    <polygon points="98,78 143.03,104 143.03,156 98,182 52.97,156 52.97,104"
-             stroke="#eaeef4" stroke-width="12"/>
-    <!-- Bigger π-circle so it reads at small sizes. r=30 inside apothem 45. -->
-    <circle cx="98" cy="130" r="30" stroke="#eaeef4" stroke-width="9"/>
+       Geometry:
+         Benzene centre (98, 130), R = 52.
+         Vertices: (98,78), (143.03,104), (143.03,156), (98,182), (52.97,156), (52.97,104).
+         Double bonds drawn on edges 1, 3, 5 (offset inward 9 px, shorter by 9 px each end).
+         Magnifier shifted UP from cy=134 → cy=124 (Sam: "few pixels too low" 2026-05-11). -->
+
+  <!-- Benzene (Kekulé) -->
+  <g stroke="#eaeef4" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+    <polygon points="98,78 143.03,104 143.03,156 98,182 52.97,156 52.97,104"/>
+    <g stroke-width="9">
+      <!-- Edge 1: top → UR (top-right inner line, offset inward by 9).
+           Edge unit: (45.03, 26)/52 = (0.866, 0.5). Inward perp: (-0.5, 0.866).
+           Start 1/6 along: (98 + 7.51, 78 + 4.33) = (105.51, 82.33), offset: (101.01, 90.13)
+           End 5/6 along:   (98 + 37.53, 78 + 21.67) = (135.53, 99.67), offset: (131.03, 107.47) -->
+      <line x1="101.01" y1="90.13" x2="131.03" y2="107.47"/>
+      <!-- Edge 3: LR → bottom. Edge unit: (-0.866, 0.5). Inward perp: (-0.5, -0.866).
+           Start 1/6 along: (143.03 - 7.51, 156 + 4.33) = (135.52, 160.33), offset: (131.02, 152.53)
+           End 5/6: (143.03 - 37.53, 156 + 21.67) = (105.50, 177.67), offset: (101.00, 169.87) -->
+      <line x1="131.02" y1="152.53" x2="101.00" y2="169.87"/>
+      <!-- Edge 5: LL → UL. Vertical (x=52.97, y from 156 to 104). Inward perp: (1, 0).
+           Start 1/6: (52.97, 156 - 8.67) = (52.97, 147.33), offset: (61.97, 147.33)
+           End 5/6:   (52.97, 156 - 43.33) = (52.97, 112.67), offset: (61.97, 112.67) -->
+      <line x1="61.97" y1="147.33" x2="61.97" y2="112.67"/>
+    </g>
   </g>
 
-  <!-- Magnifier overlapping right side. Shifted left+up for tighter
-       composition (cx 178→172, cy 138→134). -->
+  <!-- Magnifier (moved UP — Sam's "few pixels too low" fix) -->
   <g>
-    <circle cx="172" cy="134" r="50" stroke="url(#rim)" stroke-width="14"/>
-    <!-- Handle: tangent at 45° on rim — (172+50·cos45°, 134+50·sin45°) = (207.36, 169.36) -->
-    <line x1="207.36" y1="169.36" x2="232" y2="194"
+    <circle cx="172" cy="124" r="50" stroke="url(#rim)" stroke-width="14"/>
+    <!-- Handle tangent at 45°: (172 + 50·cos45°, 124 + 50·sin45°) = (207.36, 159.36) -->
+    <line x1="207.36" y1="159.36" x2="232" y2="184"
           stroke="url(#rim)" stroke-width="16" stroke-linecap="round"/>
   </g>
 </svg>
