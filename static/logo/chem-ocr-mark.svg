@@ -7,40 +7,45 @@
       <stop offset="100%" stop-color="#3a78d4"/>
     </linearGradient>
   </defs>
-  <!-- Simplified mark for 32–128 px use. Kekulé benzene + magnifier, no OH
-       (unreadable at small sizes). Strokes scaled up for legibility.
+  <!--
+    Simplified mark for 32–128 px use. Kekulé benzene + magnifier, no OH.
+    Bigger hexagon (R=52) + thicker strokes for legibility at small sizes.
 
-       Geometry:
-         Benzene centre (98, 130), R = 52.
-         Vertices: (98,78), (143.03,104), (143.03,156), (98,182), (52.97,156), (52.97,104).
-         Double bonds drawn on edges 1, 3, 5 (offset inward 9 px, shorter by 9 px each end).
-         Magnifier shifted UP from cy=134 → cy=124 (Sam: "few pixels too low" 2026-05-11). -->
+    Geometry:
+      Benzene centre (98, 130), R=52. Side length 52.
+      Vertices: (98,78), (143.03,104), (143.03,156), (98,182), (52.97,156), (52.97,104).
+      Double bonds offset 14 px inward (was 9), shorter by 9 px each end.
+      Magnifier centre (172, 124) — moved up vs v3 (Sam's "few pixels too low").
+  -->
 
   <!-- Benzene (Kekulé) -->
   <g stroke="#eaeef4" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
     <polygon points="98,78 143.03,104 143.03,156 98,182 52.97,156 52.97,104"/>
     <g stroke-width="9">
-      <!-- Edge 1: top → UR (top-right inner line, offset inward by 9).
-           Edge unit: (45.03, 26)/52 = (0.866, 0.5). Inward perp: (-0.5, 0.866).
-           Start 1/6 along: (98 + 7.51, 78 + 4.33) = (105.51, 82.33), offset: (101.01, 90.13)
-           End 5/6 along:   (98 + 37.53, 78 + 21.67) = (135.53, 99.67), offset: (131.03, 107.47) -->
-      <line x1="101.01" y1="90.13" x2="131.03" y2="107.47"/>
-      <!-- Edge 3: LR → bottom. Edge unit: (-0.866, 0.5). Inward perp: (-0.5, -0.866).
-           Start 1/6 along: (143.03 - 7.51, 156 + 4.33) = (135.52, 160.33), offset: (131.02, 152.53)
-           End 5/6: (143.03 - 37.53, 156 + 21.67) = (105.50, 177.67), offset: (101.00, 169.87) -->
-      <line x1="131.02" y1="152.53" x2="101.00" y2="169.87"/>
-      <!-- Edge 5: LL → UL. Vertical (x=52.97, y from 156 to 104). Inward perp: (1, 0).
-           Start 1/6: (52.97, 156 - 8.67) = (52.97, 147.33), offset: (61.97, 147.33)
-           End 5/6:   (52.97, 156 - 43.33) = (52.97, 112.67), offset: (61.97, 112.67) -->
-      <line x1="61.97" y1="147.33" x2="61.97" y2="112.67"/>
+      <!-- Edge 1: top → UR. Edge unit (0.866, 0.5). Inward perp (-0.5, 0.866). Offset 14. -->
+      <!-- Start 1/6 along: (98 + 7.51, 78 + 4.33) = (105.51, 82.33).
+           Offset:          (105.51 - 7,   82.33 + 12.124)  = (98.51, 94.46)
+           End 5/6 along:   (98 + 37.53, 78 + 21.67) = (135.53, 99.67).
+           Offset:          (135.53 - 7, 99.67 + 12.124) = (128.53, 111.80) -->
+      <line x1="98.51" y1="94.46" x2="128.53" y2="111.80"/>
+      <!-- Edge 3: LR → bottom. Inward perp (-0.5, -0.866). Offset 14. -->
+      <!-- Start: (143.03 - 7.51, 156 + 4.33) = (135.52, 160.33). Offset: (128.52, 148.21)
+           End:   (143.03 - 37.53, 156 + 21.67) = (105.50, 177.67). Offset: (98.50, 165.55) -->
+      <line x1="128.52" y1="148.21" x2="98.50" y2="165.55"/>
+      <!-- Edge 5: LL → UL, vertical. Inward perp (1, 0). Offset 14. -->
+      <!-- Start: (52.97, 156 - 8.67) = (52.97, 147.33). Offset: (66.97, 147.33)
+           End:   (52.97, 156 - 43.33) = (52.97, 112.67). Offset: (66.97, 112.67) -->
+      <line x1="66.97" y1="147.33" x2="66.97" y2="112.67"/>
     </g>
   </g>
 
-  <!-- Magnifier (moved UP — Sam's "few pixels too low" fix) -->
+  <!-- Magnifier — handle drawn before rim so rim overlaps it cleanly -->
   <g>
+    <!-- Handle: rounded rect at 45° tangent. Rim outer r = 50 + 7 = 57.
+         Tangent point: (172 + 57·cos45°, 124 + 57·sin45°) = (212.30, 164.30) -->
+    <rect x="-2" y="-9" width="34" height="18" rx="9"
+          fill="url(#rim)" transform="translate(212.30 164.30) rotate(45)"/>
+    <!-- Rim -->
     <circle cx="172" cy="124" r="50" stroke="url(#rim)" stroke-width="14"/>
-    <!-- Handle tangent at 45°: (172 + 50·cos45°, 124 + 50·sin45°) = (207.36, 159.36) -->
-    <line x1="207.36" y1="159.36" x2="232" y2="184"
-          stroke="url(#rim)" stroke-width="16" stroke-linecap="round"/>
   </g>
 </svg>

@@ -11,20 +11,25 @@
       <stop offset="55%"  stop-color="#6ea8fe" stop-opacity="0.06"/>
       <stop offset="100%" stop-color="#6ea8fe" stop-opacity="0.02"/>
     </radialGradient>
+    <!-- Clip to keep specular highlight strictly inside the lens glass.
+         Glass interior = the lens area MINUS the rim (rim outer r=49, inner r=39
+         because stroke-width=10 centred on r=44 path). We use the inner r=38
+         to leave a tiny gap from the rim. -->
+    <clipPath id="lensGlass">
+      <circle cx="178" cy="128" r="38"/>
+    </clipPath>
   </defs>
 
   <!--
     Chemistry: phenol (hydroxybenzene), Kekulé notation. Regular hexagon C6
     with alternating double bonds drawn as inner parallel lines. -OH on top
-    ring carbon (CPK red). Chosen Kekulé resonance form: double bonds on
-    edges 1 (top-UR), 3 (LR-bot), 5 (LL-UL).
+    ring carbon (CPK red). Chosen Kekulé form: double bonds on edges 1, 3, 5.
 
     Geometry:
-      Centre  (95, 130), vertex radius 42.
-      Vertices (CCW from top):
-        top (95, 88), UR (131.37, 109), LR (131.37, 151),
-        bottom (95, 172), LL (58.63, 151), UL (58.63, 109).
-      Inner double-bond lines: displaced 7 px inward, shortened 7 px each end.
+      Centre (95, 130), vertex radius 42. Side length 42.
+      Inner double-bond lines now offset 11 px inward (was 7) — Sam:
+        "more space between double bonds and outer ring" 2026-05-11.
+      Inner-line length shortened by 7 px each end (so it's ~67% of edge length).
   -->
 
   <!-- ─── Phenol (Kekulé) ─── -->
@@ -35,14 +40,14 @@
     <!-- Hexagon outline -->
     <polygon points="95,88 131.37,109 131.37,151 95,172 58.63,151 58.63,109"/>
 
-    <!-- Double-bond inner lines -->
+    <!-- Double-bond inner lines (offset 11 px inward, 5 px stroke) -->
     <g stroke-width="5">
-      <!-- Edge 1: top → UR -->
-      <line x1="97.56" y1="97.56" x2="121.81" y2="111.56"/>
-      <!-- Edge 3: LR → bottom -->
-      <line x1="121.81" y1="148.44" x2="97.56" y2="162.44"/>
-      <!-- Edge 5: LL → UL (vertical) -->
-      <line x1="65.63" y1="144" x2="65.63" y2="116"/>
+      <!-- Edge 1: top → UR. Inward perp (-0.5, 0.866). -->
+      <line x1="95.56" y1="101.03" x2="119.81" y2="115.03"/>
+      <!-- Edge 3: LR → bottom. Inward perp (-0.5, -0.866). -->
+      <line x1="119.81" y1="144.97" x2="95.56" y2="158.97"/>
+      <!-- Edge 5: LL → UL. Inward perp (1, 0). Vertical line, x shifted right. -->
+      <line x1="69.63" y1="144" x2="69.63" y2="116"/>
     </g>
   </g>
 
@@ -53,16 +58,28 @@
 
   <!-- ─── Magnifying glass ─── -->
   <g>
+    <!-- Lens body (translucent) -->
     <circle cx="178" cy="128" r="44" fill="url(#lens)"/>
+
+    <!-- Handle (drawn BEFORE the rim so the rim overlaps the handle's inner end
+         cleanly — no awkward join at the tangent point). Rounded rectangle
+         positioned via transform: origin sits on the rim's outer edge tangent
+         at 45° (radius 49 from lens centre). Length 28 px, width 16 px.
+         Tangent: (178 + 49·cos45°, 128 + 49·sin45°) = (212.65, 162.65). -->
+    <rect x="-2" y="-8" width="32" height="16" rx="8"
+          fill="url(#rim)" transform="translate(212.65 162.65) rotate(45)"/>
+
+    <!-- Rim (drawn AFTER handle so it covers the handle's inner end) -->
     <circle cx="178" cy="128" r="44" stroke="url(#rim)" stroke-width="10"/>
-    <line x1="209.11" y1="159.11" x2="232" y2="182"
-          stroke="url(#rim)" stroke-width="12" stroke-linecap="round"/>
-    <!-- Cleaner shine: a single bright curved arc on upper-left rim (~10
-         o'clock to ~12), plus a tiny secondary glint. Reads as proper
-         specular highlight, not a thumbprint smudge. -->
-    <path d="M 146 113 A 36 36 0 0 1 168 96"
-          stroke="#ffffff" stroke-opacity="0.55" stroke-width="5"
-          fill="none" stroke-linecap="round"/>
-    <circle cx="173" cy="103" r="2.4" fill="#ffffff" fill-opacity="0.55"/>
+
+    <!-- Specular highlight: clipped to the glass interior so NOTHING crosses
+         the rim. Main arc (10→11.5 o'clock visually) + small glint dot.
+         Both inside r=38 clip region. -->
+    <g clip-path="url(#lensGlass)">
+      <path d="M 150.95 120.75 A 28 28 0 0 1 170.75 100.95"
+            stroke="#ffffff" stroke-opacity="0.60" stroke-width="5"
+            fill="none" stroke-linecap="round"/>
+      <circle cx="178" cy="106" r="2.4" fill="#ffffff" fill-opacity="0.55"/>
+    </g>
   </g>
 </svg>
