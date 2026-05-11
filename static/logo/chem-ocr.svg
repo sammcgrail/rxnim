@@ -1,0 +1,58 @@
+<svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" fill="none" role="img" aria-label="Chem-OCR logo">
+  <title>Chem-OCR — chemistry recognized</title>
+  <defs>
+    <linearGradient id="rim" x1="0.1" y1="0.1" x2="0.9" y2="0.9">
+      <stop offset="0%"   stop-color="#9ec5ff"/>
+      <stop offset="55%"  stop-color="#6ea8fe"/>
+      <stop offset="100%" stop-color="#3a78d4"/>
+    </linearGradient>
+    <radialGradient id="lens" cx="38%" cy="32%" r="80%">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.10"/>
+      <stop offset="55%"  stop-color="#6ea8fe" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#6ea8fe" stop-opacity="0.02"/>
+    </radialGradient>
+  </defs>
+
+  <!--
+    Chemistry: phenol (hydroxybenzene). Regular hexagon C6, π-system shown
+    as inner circle (IUPAC aromatic notation), -OH substituent on top ring
+    carbon. CPK red for oxygen. C–O bond length ≈ 1.4× C–C bond for
+    accurate proportions.
+  -->
+
+  <!-- ─── Phenol ─── -->
+  <g stroke-linecap="round" stroke-linejoin="round">
+    <!-- C–O bond. Length 32 px (1.5× C–C side of 36.4 px) -->
+    <line x1="95" y1="88" x2="95" y2="56" stroke="#eaeef4" stroke-width="7"/>
+    <!-- OH label — CPK red, brighter and more saturated -->
+    <text x="95" y="46" font-family="-apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif"
+          font-size="28" font-weight="700" letter-spacing="-1"
+          fill="#e23d3d" text-anchor="middle">OH</text>
+
+    <!-- Hexagon: vertex-up regular hexagon, centre (95,130), R=42.
+         Vertices: (95,88), (131.37,109), (131.37,151), (95,172), (58.63,151), (58.63,109) -->
+    <polygon points="95,88 131.37,109 131.37,151 95,172 58.63,151 58.63,109"
+             stroke="#eaeef4" stroke-width="7"/>
+
+    <!-- Aromatic π-system inner circle -->
+    <circle cx="95" cy="130" r="22" stroke="#eaeef4" stroke-width="4"/>
+  </g>
+
+  <!-- ─── Magnifying glass ─── -->
+  <!-- Moved right to cx=178 so hex right edge isn't eaten. r=44 for breathing room. -->
+  <g>
+    <!-- Subtle lens body — chemistry visible through it -->
+    <circle cx="178" cy="128" r="44" fill="url(#lens)"/>
+    <!-- Rim -->
+    <circle cx="178" cy="128" r="44" stroke="url(#rim)" stroke-width="10"/>
+    <!-- Handle (thinner now: 12 vs 14). Tangent at 45° on lower-right rim.
+         Tangent point: (178 + 44·cos45°, 128 + 44·sin45°) = (209.11, 159.11) -->
+    <line x1="209.11" y1="159.11" x2="232" y2="182"
+          stroke="url(#rim)" stroke-width="12" stroke-linecap="round"/>
+    <!-- Specular highlight: thin crescent arc on upper-left of lens (replaces
+         the murky ellipse). 12 o'clock → 9 o'clock-ish arc. -->
+    <path d="M 142 122 A 44 44 0 0 1 168 86"
+          stroke="#ffffff" stroke-opacity="0.40" stroke-width="3"
+          fill="none" stroke-linecap="round"/>
+  </g>
+</svg>

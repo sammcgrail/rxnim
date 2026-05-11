@@ -2,12 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>rxnim - chemistry reaction image parser</title>
+<title>Chem-OCR — chemistry reaction image parser</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0b0d12">
-<meta name="description" content="Self-hosted CPU-only chemistry reaction image parser - extracts SMILES, conditions, products from reaction-scheme images.">
+<meta name="description" content="Chem-OCR — self-hosted CPU-only chemistry reaction image parser. Extracts SMILES, conditions, products from reaction-scheme images.">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="apple-touch-icon" sizes="192x192" href="/static/logo/chem-ocr-mark-192.png">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   html, body { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; touch-action: manipulation; }
@@ -22,9 +26,13 @@
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   }
   .wrap { max-width: 1100px; margin: 0 auto; padding: clamp(16px, 4vw, 32px); }
-  header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 18px; gap: 12px; flex-wrap: wrap; }
-  h1 { font-size: clamp(20px, 4vw, 28px); font-weight: 700; letter-spacing: -0.02em; }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; gap: 12px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .brand img { width: 56px; height: 56px; flex-shrink: 0; }
+  .brand .title { min-width: 0; }
+  h1 { font-size: clamp(22px, 4.5vw, 30px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
   .sub { color: #8b9099; font-size: 13px; }
+  @media (max-width: 480px) { .brand img { width: 44px; height: 44px; } }
   a { color: #6ea8fe; text-decoration: none; }
   a:hover { text-decoration: underline; }
 
@@ -128,9 +136,12 @@
 <body>
 <div class="wrap">
   <header>
-    <div>
-      <h1>rxnim</h1>
-      <div class="sub">chemistry reaction image &rarr; SMILES &middot; CPU inference</div>
+    <div class="brand">
+      <img src="/static/logo/chem-ocr.svg" alt="Chem-OCR logo" width="56" height="56">
+      <div class="title">
+        <h1>Chem-OCR</h1>
+        <div class="sub">chemistry reaction image &rarr; SMILES &middot; CPU inference</div>
+      </div>
     </div>
     <div class="sub" id="health">checking&hellip;</div>
   </header>

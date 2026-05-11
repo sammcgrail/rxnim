@@ -1,0 +1,29 @@
+<svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" fill="none" role="img" aria-label="Chem-OCR mark">
+  <title>Chem-OCR (mark)</title>
+  <defs>
+    <linearGradient id="rim" x1="0.1" y1="0.1" x2="0.9" y2="0.9">
+      <stop offset="0%"   stop-color="#9ec5ff"/>
+      <stop offset="55%"  stop-color="#6ea8fe"/>
+      <stop offset="100%" stop-color="#3a78d4"/>
+    </linearGradient>
+  </defs>
+  <!-- Simplified mark for 32–128 px use. No -OH text (unreadable at small
+       size). Strokes tuned thinner than v1 for breathing room. -->
+
+  <!-- Benzene: vertex-up, centre (98,130), R=52 -->
+  <g stroke-linecap="round" stroke-linejoin="round">
+    <polygon points="98,78 143.03,104 143.03,156 98,182 52.97,156 52.97,104"
+             stroke="#eaeef4" stroke-width="12"/>
+    <!-- Bigger π-circle so it reads at small sizes. r=30 inside apothem 45. -->
+    <circle cx="98" cy="130" r="30" stroke="#eaeef4" stroke-width="9"/>
+  </g>
+
+  <!-- Magnifier overlapping right side. Shifted left+up for tighter
+       composition (cx 178→172, cy 138→134). -->
+  <g>
+    <circle cx="172" cy="134" r="50" stroke="url(#rim)" stroke-width="14"/>
+    <!-- Handle: tangent at 45° on rim — (172+50·cos45°, 134+50·sin45°) = (207.36, 169.36) -->
+    <line x1="207.36" y1="169.36" x2="232" y2="194"
+          stroke="url(#rim)" stroke-width="16" stroke-linecap="round"/>
+  </g>
+</svg>
