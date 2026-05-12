@@ -626,6 +626,31 @@ async def root():
     return HTMLResponse("<h1>rxnim</h1><p>UI not built</p>")
 
 
+@app.post("/api/smiles_to_svg")
+async def api_smiles_to_svg(payload: dict):
+    """Re-render an arbitrary SMILES string to an RDKit-style SVG depiction.
+
+    Wired to the in-page Ketcher editor (2026-05-12): when the user saves an
+    edit, the frontend POSTs the new SMILES here and swaps the rendered SVG
+    on the molecule card. Keeps depiction style consistent with the rest of
+    the parse output (RDKit, not Ketcher's internal renderer).
+    """
+    smiles = (payload.get("smiles") or "").strip()
+    if not smiles:
+        return {"ok": False, "error": "empty smiles"}
+    if len(smiles) > 2000:  # arbitrary cap; real molecules don't get this long
+        return {"ok": False, "error": "smiles too long"}
+    width = int(payload.get("width") or 300)
+    height = int(payload.get("height") or 200)
+    width = max(50, min(width, 1200))
+    height = max(50, min(height, 1200))
+    svg = smiles_to_svg(smiles, width=width, height=height)
+    if not svg:
+        return {"ok": False, "error": "invalid smiles or render failed"}
+    molfile = smiles_to_molfile(smiles)
+    return {"ok": True, "svg": svg, "molfile": molfile, "smiles": smiles}
+
+
 # Allow large request bodies
 @app.middleware("http")
 async def big_body(request: Request, call_next):
